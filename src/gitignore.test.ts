@@ -31,6 +31,10 @@ describe("gitignore bootstrap", () => {
     });
   });
 
+  test("leaves an already-current managed gitignore unchanged", () => {
+    expect(normalizeBrvGitignore(brvGitignore)).toBe(brvGitignore);
+  });
+
   test("normalizes an old managed block while preserving custom rules", () => {
     const normalized = normalizeBrvGitignore(
       [

@@ -39,7 +39,10 @@ export const normalizeBrvGitignore = (existing: string) => {
   };
 
   for (const line of existing
-    .replace(managedGitignoreBlock, `\n${brvGitignore}\n`)
+    .replace(managedGitignoreBlock, (match) => {
+      const separator = match.startsWith("\r\n") ? "\r\n" : match.startsWith("\n") ? "\n" : "";
+      return `${separator}${brvGitignore}`;
+    })
     .split(/\r?\n/)) {
     if (line === brvGitignoreBeginMarker) {
       insertManagedBlock();
