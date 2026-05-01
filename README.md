@@ -1,112 +1,89 @@
-<div align='center'>
-    <br/>
-    <br/>
-    <h3>opencode-byterover</h3>
-    <p>ByteRover memory integration for OpenCode.</p>
-    <a href="https://www.npmjs.com/package/opencode-byterover"><img src="https://img.shields.io/npm/v/opencode-byterover?style=for-the-badge&logo=npm&label=npm&color=cb3837" alt="npm version" /></a>
-    <br/>
-    <br/>
-</div>
+# pi-byterover
 
-## Overview
+`pi-byterover` connects Pi sessions to ByteRover through `@byterover/brv-bridge`.
 
-`opencode-byterover` is an OpenCode plugin that connects OpenCode sessions to ByteRover through `@byterover/brv-bridge`.
-
-The plugin persists useful session context when sessions become idle or compact, then recalls relevant context during system prompt transformation.
+It automatically recalls relevant ByteRover memory before an agent response and injects that context into the session. After useful completed turns, it persists durable facts, decisions, preferences, and technical details back to ByteRover.
 
 ## Prerequisites
 
-- OpenCode with plugin support enabled.
-- ByteRover CLI installed and available as `brv`, or a custom executable path configured with `brvPath`.
-- ByteRover initialized for the project you want OpenCode to use as memory.
-
-Verify the CLI is reachable before enabling the plugin:
-
-```bash
-brv --help
-```
+- Pi installed.
+- ByteRover CLI installed as `brv`, or a custom executable path configured with `brvPath`.
+- A project where ByteRover can bootstrap and use `.brv` state.
 
 ## Installation
 
-Add the plugin to your OpenCode configuration:
+Install the package with Pi:
 
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-byterover"]
-}
+```bash
+pi install npm:pi-byterover
 ```
 
-For custom settings, use the tuple form shown below.
+For local development:
 
-## Verify Setup
-
-After starting OpenCode in a repository with the plugin enabled:
-
-- `.brv/.gitignore` should be created or updated with an `opencode-byterover` managed block.
-- OpenCode logs should include entries with `service: "byterover"`.
-- If ByteRover is unavailable, OpenCode should show a warning toast unless `quiet` is enabled.
+```bash
+pnpm install
+pnpm build
+pi -e ./dist/index.js
+```
 
 ## Configuration
 
-The plugin accepts these optional settings:
+Configure `pi-byterover` with either a project config file or a global config file:
 
-- `enabled`: enable or disable the plugin without removing it from config. Defaults to `true`.
-- `brvPath`: custom ByteRover CLI path. Defaults to `brv` (assuming it's in the system `PATH`).
-- `searchTimeoutMs`: ByteRover search timeout in milliseconds. Defaults to `30000`.
-- `recallTimeoutMs`: ByteRover recall timeout in milliseconds. Defaults to `30000`.
-- `persistTimeoutMs`: ByteRover persist timeout in milliseconds. Defaults to `60000`.
-- `quiet`: suppress toast notifications for ByteRover operations. Defaults to `false`.
-- `autoRecall`: automatically recall and inject ByteRover context into prompts. Defaults to `true`.
-- `autoPersist`: automatically curate session turns into ByteRover. Defaults to `true`.
-- `manualTools`: register manual ByteRover recall, search, and persist tools. Defaults to `true`.
-- `contextTagName`: XML-style tag name used for injected recall context. Defaults to `byterover-context`.
-- `recallPrompt`: custom instruction text used before the recent conversation sent to ByteRover recall.
-- `persistPrompt`: custom instruction text used before the conversation turn sent to ByteRover curation.
-- `maxRecallTurns`: maximum recent user turns used to resolve recall context. Defaults to `3`.
-- `maxRecallChars`: maximum recent conversation characters used for recall. Defaults to `4096`.
+- Project: `.pi/byterover.json`
+- Global: `~/.pi/agent/byterover.json`
 
-Numeric timeout and limit values must be positive integers. `brvPath`, `recallPrompt`, and `persistPrompt` must be non-empty strings. `contextTagName` must be a simple XML-style tag name such as `byterover-context`.
-
-## Manual Tools
-
-When `manualTools` is enabled, the plugin exposes three OpenCode tools:
-
-- `brv_recall`: asks ByteRover to synthesize relevant memory for a raw query. Accepts optional `timeoutMs`.
-- `brv_search`: performs ranked file-level ByteRover memory search with optional `limit`, `scope`, and `timeoutMs` arguments.
-- `brv_persist`: persists raw memory text directly into ByteRover without automatic curation prompt wrapping. Defaults to fire-and-forget mode and accepts optional `timeoutMs` for long-running writes.
-
-When `autoRecall` and `autoPersist` are enabled, the system prompt tells the agent to rely on automatic memory for routine behavior instead of consistently calling manual tools. If either automatic behavior is disabled, the prompt instead tells the agent to use the manual tools when durable memory is useful.
-
-Use manual recall or search when the agent needs targeted context beyond automatic recall. Use manual persist when there is a durable fact, decision, preference, or technical detail that should be saved immediately instead of waiting for idle-session curation.
-
-### Example
+Project configuration takes precedence over global configuration. If no config file is present, defaults are used.
 
 ```json
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    [
-      "opencode-byterover",
-      {
-        "enabled": true,
-        "brvPath": "brv",
-        "searchTimeoutMs": 30000,
-        "recallTimeoutMs": 30000,
-        "persistTimeoutMs": 60000,
-        "autoRecall": true,
-        "autoPersist": true,
-        "manualTools": true,
-        "contextTagName": "byterover-context",
-        "recallPrompt": "Recall relevant project context for the latest user request.",
-        "persistPrompt": "Curate durable facts, decisions, preferences, and technical details.",
-        "maxRecallTurns": 3,
-        "maxRecallChars": 4096
-      }
-    ]
-  ]
+  "enabled": true,
+  "brvPath": "brv",
+  "searchTimeoutMs": 30000,
+  "recallTimeoutMs": 30000,
+  "persistTimeoutMs": 60000,
+  "quiet": false,
+  "autoRecall": true,
+  "autoPersist": true,
+  "manualTools": true,
+  "contextTagName": "byterover-context",
+  "recallPrompt": "Recall any relevant context that would help answer the latest user message.\nUse the recent conversation only to resolve references and intent.\nDo not restate the query in your findings.",
+  "persistPrompt": "The following is a conversation between a user and an AI assistant.\nCurate only information with lasting value: facts, decisions, technical details, preferences, or notable outcomes.\nSkip trivial messages such as greetings, acknowledgments (\"ok\", \"thanks\", \"sure\", \"got it\"), one-word replies, anything with no substantive content.",
+  "maxRecallTurns": 3,
+  "maxRecallChars": 4096
 }
 ```
+
+Configuration fields:
+
+- `enabled`: Enable or disable the package without removing configuration. Defaults to `true`.
+- `brvPath`: ByteRover CLI executable path. Defaults to `brv`.
+- `searchTimeoutMs`: ByteRover search timeout in milliseconds. Defaults to `30000`.
+- `recallTimeoutMs`: ByteRover recall timeout in milliseconds. Defaults to `30000`.
+- `persistTimeoutMs`: ByteRover persist timeout in milliseconds. Defaults to `60000`.
+- `quiet`: Suppress Pi notifications for ByteRover operations. Defaults to `false`.
+- `autoRecall`: Automatically recall and inject ByteRover context before agent responses. Defaults to `true`.
+- `autoPersist`: Automatically persist useful completed conversation turns after responses. Defaults to `true`.
+- `manualTools`: Register manual ByteRover tools. Defaults to `true`.
+- `contextTagName`: XML-style tag name used for injected recall context. Defaults to `byterover-context`.
+- `recallPrompt`: Instruction text prepended to recent conversation context for automatic recall.
+- `persistPrompt`: Instruction text prepended to completed turns for automatic persistence curation.
+- `maxRecallTurns`: Maximum recent user turns used to resolve automatic recall context. Defaults to `3`.
+- `maxRecallChars`: Maximum recent conversation characters used for automatic recall. Defaults to `4096`.
+
+Numeric timeout and limit values must be positive integers. `brvPath`, `recallPrompt`, and `persistPrompt` must be non-empty strings. `contextTagName` must be a simple XML-style tag name such as `byterover-context`.
+
+Persist does not require ByteRover to be ready ahead of time. ByteRover bootstraps automatically when persist is called.
+
+## Manual Tools
+
+When `manualTools` is enabled, Pi agents can use these ByteRover tools:
+
+- `brv_recall`: Ask ByteRover to synthesize relevant memory for a query. Use it when the agent needs targeted, summarized context beyond automatic recall. Accepts optional `timeoutMs`.
+- `brv_search`: Search ByteRover memory and return ranked file-level results. Use it when the agent needs to inspect matching memory sources or compare multiple candidates. Accepts optional `limit`, `scope`, and `timeoutMs`.
+- `brv_persist`: Persist raw memory text directly into ByteRover. Use it when a durable fact, decision, preference, or technical detail should be saved immediately instead of waiting for automatic turn persistence. Defaults to fire-and-forget mode and accepts optional `timeoutMs` for long-running writes.
+
+With `autoRecall` and `autoPersist` enabled, routine memory behavior is automatic. Manual tools are best for explicit lookups, source searches, or immediate saves.
 
 ## Development
 
@@ -118,15 +95,3 @@ pnpm test
 pnpm typecheck
 pnpm build
 ```
-
-## Releases
-
-This package uses Changesets and GitHub Actions for releases.
-
-Create a release note for user-facing changes:
-
-```bash
-pnpm changeset
-```
-
-Merging the generated release PR publishes the package to npm through trusted publishing.
