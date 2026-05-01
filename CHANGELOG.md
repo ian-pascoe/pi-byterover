@@ -1,5 +1,11 @@
 # pi-byterover
 
+## 0.2.1
+
+### Patch Changes
+
+- [#3](https://github.com/ian-pascoe/pi-byterover/pull/3) [`4c7e5ea`](https://github.com/ian-pascoe/pi-byterover/commit/4c7e5ea5f6593624c8cae577ae339367d41b2654) Thanks [@ian-pascoe](https://github.com/ian-pascoe)! - Refresh the README header with npm, license, and repository badges.
+
 ## 0.2.0
 
 ### Minor Changes
