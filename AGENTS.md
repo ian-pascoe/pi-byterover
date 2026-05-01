@@ -2,9 +2,9 @@
 
 ## Project Shape
 
-- This is a single-package ESM TypeScript OpenCode plugin; the runtime entrypoint is `src/index.ts`, bundled by Rolldown from `src/index.ts` to `dist/index.js`.
-- The plugin wires OpenCode hooks for `session.idle`, `experimental.session.compacting`, and `experimental.chat.system.transform` to `@byterover/brv-bridge`.
-- Tests live beside the entrypoint in `src/index.test.ts` and mock `@byterover/brv-bridge`; use them to verify plugin behavior without a real `brv` binary.
+- This is a single-package ESM TypeScript Pi extension/package; the runtime entrypoint is `src/index.ts`, bundled by Rolldown to `dist/index.js`.
+- The extension wires Pi events `session_start`, `before_agent_start`, `agent_end`, and `session_before_compact` to `@byterover/brv-bridge`.
+- Tests live beside the entrypoint in `src/index.test.ts` and mock `@byterover/brv-bridge`; use them to verify extension behavior without a real `brv` binary.
 
 ## Commands
 
@@ -17,7 +17,7 @@
 ## Generated And Local State
 
 - `dist/` is build output and is ignored; do not edit it by hand.
-- `.brv/` is ByteRover workspace state. Oxlint and oxfmt ignore it, and the plugin bootstraps `.brv/.gitignore`; avoid treating context-tree files as source unless the task is specifically about ByteRover memory.
+- `.brv/` is ByteRover workspace state. Oxlint and oxfmt ignore it, and the extension bootstraps `.brv/.gitignore`; avoid treating context-tree files as source unless the task is specifically about ByteRover memory.
 - `.changeset/*.md` files are release notes, not prose docs; add one for user-facing package changes that need publishing.
 
 ## Release And CI
