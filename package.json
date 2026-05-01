@@ -3,10 +3,10 @@
   "version": "0.1.8",
   "description": "Pi ByteRover extension",
   "keywords": [
-    "pi-package",
-    "pi",
     "byterover",
-    "memory"
+    "memory",
+    "pi",
+    "pi-package"
   ],
   "homepage": "https://github.com/ian-pascoe/pi-byterover#readme",
   "bugs": {
@@ -36,11 +36,6 @@
     "access": "public",
     "provenance": true
   },
-  "pi": {
-    "extensions": [
-      "./dist/index.js"
-    ]
-  },
   "scripts": {
     "build": "pnpm run clean && pnpm run build:js && pnpm run build:types",
     "build:js": "rolldown -c",
@@ -62,11 +57,6 @@
     "@byterover/brv-bridge": "^1.1.0",
     "zod": "^4.3.6"
   },
-  "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@mariozechner/pi-ai": "*",
-    "typebox": "*"
-  },
   "devDependencies": {
     "@changesets/changelog-github": "^0.6.0",
     "@changesets/cli": "^2.31.0",
@@ -78,5 +68,15 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
-  "packageManager": "pnpm@10.33.2"
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  }
 }

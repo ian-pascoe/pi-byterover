@@ -31,6 +31,7 @@
 ### Task 1: Package Manifest and Config Marker Baseline
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `src/config.ts`
 - Test: `pnpm typecheck`
@@ -107,6 +108,7 @@ git commit -m "chore: prepare package for pi extension"
 ### Task 2: Config Loader
 
 **Files:**
+
 - Create: `src/config-loader.ts`
 - Create: `src/config-loader.test.ts`
 - Modify: `src/config.ts`
@@ -151,7 +153,10 @@ describe("loadConfig", () => {
     const cwd = await tempDir();
     const home = await tempDir();
     await mkdir(join(home, ".pi", "agent"), { recursive: true });
-    await writeFile(join(home, ".pi", "agent", "byterover.json"), JSON.stringify({ autoRecall: false }));
+    await writeFile(
+      join(home, ".pi", "agent", "byterover.json"),
+      JSON.stringify({ autoRecall: false }),
+    );
 
     const result = await loadConfig({ cwd, homeDir: home });
 
@@ -164,8 +169,14 @@ describe("loadConfig", () => {
     const home = await tempDir();
     await mkdir(join(home, ".pi", "agent"), { recursive: true });
     await mkdir(join(cwd, ".pi"), { recursive: true });
-    await writeFile(join(home, ".pi", "agent", "byterover.json"), JSON.stringify({ autoRecall: false }));
-    await writeFile(join(cwd, ".pi", "byterover.json"), JSON.stringify({ autoRecall: true, brvPath: "/bin/brv" }));
+    await writeFile(
+      join(home, ".pi", "agent", "byterover.json"),
+      JSON.stringify({ autoRecall: false }),
+    );
+    await writeFile(
+      join(cwd, ".pi", "byterover.json"),
+      JSON.stringify({ autoRecall: true, brvPath: "/bin/brv" }),
+    );
 
     const result = await loadConfig({ cwd, homeDir: home });
 
@@ -181,7 +192,10 @@ describe("loadConfig", () => {
     const cwd = await tempDir();
     const home = await tempDir();
     await mkdir(join(cwd, ".pi"), { recursive: true });
-    await writeFile(join(cwd, ".pi", "byterover.json"), JSON.stringify({ recallTimeoutMs: "slow" }));
+    await writeFile(
+      join(cwd, ".pi", "byterover.json"),
+      JSON.stringify({ recallTimeoutMs: "slow" }),
+    );
 
     const result = await loadConfig({ cwd, homeDir: home });
 
@@ -229,8 +243,14 @@ const readJsonIfExists = async (path: string) => {
   }
 };
 
-export const loadConfig = async ({ cwd, homeDir = homedir() }: LoadConfigOptions): Promise<LoadConfigResult> => {
-  const candidates = [join(cwd, ".pi", "byterover.json"), join(homeDir, ".pi", "agent", "byterover.json")];
+export const loadConfig = async ({
+  cwd,
+  homeDir = homedir(),
+}: LoadConfigOptions): Promise<LoadConfigResult> => {
+  const candidates = [
+    join(cwd, ".pi", "byterover.json"),
+    join(homeDir, ".pi", "agent", "byterover.json"),
+  ];
 
   for (const source of candidates) {
     const raw = await readJsonIfExists(source);
@@ -240,7 +260,11 @@ export const loadConfig = async ({ cwd, homeDir = homedir() }: LoadConfigOptions
       return { success: true, config: ConfigSchema.parse(parsed), source };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return { success: false, source, error: new Error(`Invalid Byterover configuration in ${source}: ${message}`) };
+      return {
+        success: false,
+        source,
+        error: new Error(`Invalid Byterover configuration in ${source}: ${message}`),
+      };
     }
   }
 
@@ -268,6 +292,7 @@ git commit -m "feat: load pi byterover config files"
 ### Task 3: Gitignore Bootstrap Module
 
 **Files:**
+
 - Create: `src/gitignore.ts`
 - Modify: `src/index.test.ts` later in Task 6, but add focused tests here if extracting from existing tests is convenient.
 - Modify: `src/index.ts` only after Task 5.
@@ -313,7 +338,9 @@ export const normalizeBrvGitignore = (existing: string) => {
     insertedManagedBlock = true;
   };
 
-  for (const line of existing.replace(managedGitignoreBlock, `\n${brvGitignore}\n`).split(/\r?\n/)) {
+  for (const line of existing
+    .replace(managedGitignoreBlock, `\n${brvGitignore}\n`)
+    .split(/\r?\n/)) {
     if (line === brvGitignoreBeginMarker) {
       insertManagedBlock();
       skippingManagedBlock = true;
@@ -374,6 +401,7 @@ git commit -m "refactor: isolate byterover gitignore bootstrap"
 ### Task 4: Pi Session Message Helpers
 
 **Files:**
+
 - Replace: `src/messages.ts`
 - Replace: `src/messages.test.ts`
 
@@ -399,15 +427,15 @@ const entry = (id: string, role: "user" | "assistant", text: string): PiSessionM
 
 describe("Pi message helpers", () => {
   test("formats user and assistant text messages", () => {
-    expect(formatMessages([entry("u1", "user", " question "), entry("a1", "assistant", " answer ")])).toBe(
-      "[user]: question\n\n[assistant]: answer",
-    );
+    expect(
+      formatMessages([entry("u1", "user", " question "), entry("a1", "assistant", " answer ")]),
+    ).toBe("[user]: question\n\n[assistant]: answer");
   });
 
   test("skips empty text messages", () => {
-    expect(formatMessages([entry("u1", "user", " question "), entry("a1", "assistant", "   ")])).toBe(
-      "[user]: question",
-    );
+    expect(
+      formatMessages([entry("u1", "user", " question "), entry("a1", "assistant", "   ")]),
+    ).toBe("[user]: question");
   });
 
   test("selects latest completed user request", () => {
@@ -470,7 +498,14 @@ type MessageEntry = {
 };
 
 const isTextBlock = (value: unknown): value is TextBlock => {
-  return typeof value === "object" && value !== null && "type" in value && value.type === "text" && "text" in value && typeof value.text === "string";
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "text" &&
+    "text" in value &&
+    typeof value.text === "string"
+  );
 };
 
 export const extractPiSessionMessages = (entries: Array<unknown>): PiSessionMessage[] => {
@@ -486,7 +521,11 @@ export const extractPiSessionMessages = (entries: Array<unknown>): PiSessionMess
       typeof content === "string"
         ? content
         : Array.isArray(content)
-          ? content.filter(isTextBlock).map((part) => part.text.trim()).filter(Boolean).join("\n")
+          ? content
+              .filter(isTextBlock)
+              .map((part) => part.text.trim())
+              .filter(Boolean)
+              .join("\n")
           : "";
 
     messages.push({ id: candidate.id, role, text });
@@ -500,9 +539,11 @@ export const formatMessage = (message: PiSessionMessage) => {
   return `[${message.role}]: ${text}`;
 };
 
-export const formatMessages = (messages: PiSessionMessage[]) => messages.map(formatMessage).filter(Boolean).join("\n\n");
+export const formatMessages = (messages: PiSessionMessage[]) =>
+  messages.map(formatMessage).filter(Boolean).join("\n\n");
 
-export const turnKey = (messages: PiSessionMessage[]) => messages.map((message) => message.id).join(":");
+export const turnKey = (messages: PiSessionMessage[]) =>
+  messages.map((message) => message.id).join(":");
 
 export const selectMessagesInTurn = (messages: PiSessionMessage[]) => {
   const selected: PiSessionMessage[] = [];
@@ -564,6 +605,7 @@ git commit -m "feat: add pi session message helpers"
 ### Task 5: Pi Manual Tools
 
 **Files:**
+
 - Create: `src/tools.ts`
 - Test through `src/index.test.ts` in Task 6.
 
@@ -580,11 +622,21 @@ import type { ConfigSchema } from "./config.js";
 import { stripEchoedRecallQuery } from "./recall.js";
 
 type Config = ReturnType<typeof ConfigSchema.parse>;
-type BridgeFactory = (override?: { cwd?: string; searchTimeoutMs?: number; recallTimeoutMs?: number; persistTimeoutMs?: number }) => BrvBridge;
+type BridgeFactory = (override?: {
+  cwd?: string;
+  searchTimeoutMs?: number;
+  recallTimeoutMs?: number;
+  persistTimeoutMs?: number;
+}) => BrvBridge;
 type Notify = (variant: "success" | "info" | "warning" | "error", message: string) => void;
 type Log = (level: "debug" | "info" | "warn" | "error", message: string) => void;
 
-const timeoutSchema = Type.Optional(Type.Number({ minimum: 1, description: "Optional timeout in milliseconds for this ByteRover operation." }));
+const timeoutSchema = Type.Optional(
+  Type.Number({
+    minimum: 1,
+    description: "Optional timeout in milliseconds for this ByteRover operation.",
+  }),
+);
 
 const recallSchema = Type.Object({
   query: Type.String({ minLength: 1, description: "Raw recall query." }),
@@ -593,8 +645,19 @@ const recallSchema = Type.Object({
 
 const searchSchema = Type.Object({
   query: Type.String({ minLength: 1, description: "Raw search query." }),
-  limit: Type.Optional(Type.Number({ minimum: 1, maximum: 50, description: "Maximum number of results to return, from 1 to 50." })),
-  scope: Type.Optional(Type.String({ minLength: 1, description: "Optional ByteRover path prefix to scope search results." })),
+  limit: Type.Optional(
+    Type.Number({
+      minimum: 1,
+      maximum: 50,
+      description: "Maximum number of results to return, from 1 to 50.",
+    }),
+  ),
+  scope: Type.Optional(
+    Type.String({
+      minLength: 1,
+      description: "Optional ByteRover path prefix to scope search results.",
+    }),
+  ),
   timeoutMs: timeoutSchema,
 });
 
@@ -607,7 +670,11 @@ export type BrvRecallInput = Static<typeof recallSchema>;
 export type BrvSearchInput = Static<typeof searchSchema>;
 export type BrvPersistInput = Static<typeof persistSchema>;
 
-export const formatSearchResults = (results: SearchResultItem[], totalFound: number, message: string) => {
+export const formatSearchResults = (
+  results: SearchResultItem[],
+  totalFound: number,
+  message: string,
+) => {
   if (results.length === 0) return message || "No ByteRover search results found.";
   const header = `Found ${totalFound} ByteRover ${totalFound === 1 ? "result" : "results"}.`;
   const lines = results.flatMap((result, index) => {
@@ -621,7 +688,8 @@ export const formatSearchResults = (results: SearchResultItem[], totalFound: num
       details.length > 0 ? `   ${details.join(", ")}` : undefined,
       `   ${result.excerpt}`,
     ];
-    if (result.relatedPaths && result.relatedPaths.length > 0) output.push(`   related: ${result.relatedPaths.join(", ")}`);
+    if (result.relatedPaths && result.relatedPaths.length > 0)
+      output.push(`   related: ${result.relatedPaths.join(", ")}`);
     return output.filter((line) => line !== undefined);
   });
   return [header, ...lines].join("\n");
@@ -651,16 +719,25 @@ export const registerManualTools = (input: {
     promptSnippet: "Recall relevant context from ByteRover memory for a raw query.",
     parameters: recallSchema,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      if (!(await ensureBridgeReady())) return { content: [{ type: "text", text: "ByteRover bridge is not ready." }] };
+      if (!(await ensureBridgeReady()))
+        return { content: [{ type: "text", text: "ByteRover bridge is not ready." }] };
       try {
-        const recallBridge = params.timeoutMs === undefined ? bridge : createBridge({ cwd: ctx.cwd, recallTimeoutMs: params.timeoutMs });
+        const recallBridge =
+          params.timeoutMs === undefined
+            ? bridge
+            : createBridge({ cwd: ctx.cwd, recallTimeoutMs: params.timeoutMs });
         const result = await recallBridge.recall(params.query, { cwd: ctx.cwd, signal });
-        const content = stripEchoedRecallQuery(result.content, params.query) || "No relevant ByteRover context found.";
+        const content =
+          stripEchoedRecallQuery(result.content, params.query) ||
+          "No relevant ByteRover context found.";
         return { content: [{ type: "text", text: content }], details: { status: "completed" } };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log("error", `Manual ByteRover recall failed: ${message}`);
-        return { content: [{ type: "text", text: `ByteRover recall failed: ${message}` }], details: { status: "error", message } };
+        return {
+          content: [{ type: "text", text: `ByteRover recall failed: ${message}` }],
+          details: { status: "error", message },
+        };
       }
     },
   });
@@ -672,19 +749,34 @@ export const registerManualTools = (input: {
     promptSnippet: "Search ByteRover memory for ranked file-level context results.",
     parameters: searchSchema,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      if (!(await ensureBridgeReady())) return { content: [{ type: "text", text: "ByteRover bridge is not ready." }] };
+      if (!(await ensureBridgeReady()))
+        return { content: [{ type: "text", text: "ByteRover bridge is not ready." }] };
       try {
-        const searchBridge = params.timeoutMs === undefined ? bridge : createBridge({ cwd: ctx.cwd, searchTimeoutMs: params.timeoutMs });
+        const searchBridge =
+          params.timeoutMs === undefined
+            ? bridge
+            : createBridge({ cwd: ctx.cwd, searchTimeoutMs: params.timeoutMs });
         const result = await searchBridge.search(params.query, {
           cwd: ctx.cwd,
           ...(params.limit === undefined ? {} : { limit: params.limit }),
           ...(params.scope === undefined ? {} : { scope: params.scope }),
         });
-        return { content: [{ type: "text", text: formatSearchResults(result.results, result.totalFound, result.message) }], details: result };
+        return {
+          content: [
+            {
+              type: "text",
+              text: formatSearchResults(result.results, result.totalFound, result.message),
+            },
+          ],
+          details: result,
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log("error", `Manual ByteRover search failed: ${message}`);
-        return { content: [{ type: "text", text: `ByteRover search failed: ${message}` }], details: { status: "error", message } };
+        return {
+          content: [{ type: "text", text: `ByteRover search failed: ${message}` }],
+          details: { status: "error", message },
+        };
       }
     },
   });
@@ -697,14 +789,23 @@ export const registerManualTools = (input: {
     parameters: persistSchema,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
-        const persistBridge = params.timeoutMs === undefined ? bridge : createBridge({ cwd: ctx.cwd, persistTimeoutMs: params.timeoutMs });
+        const persistBridge =
+          params.timeoutMs === undefined
+            ? bridge
+            : createBridge({ cwd: ctx.cwd, persistTimeoutMs: params.timeoutMs });
         const result = await persistBridge.persist(params.context, { cwd: ctx.cwd, detach: true });
         const suffix = result.message ? `: ${result.message}` : "";
-        return { content: [{ type: "text", text: `ByteRover persist ${result.status}${suffix}` }], details: result };
+        return {
+          content: [{ type: "text", text: `ByteRover persist ${result.status}${suffix}` }],
+          details: result,
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         log("error", `Manual ByteRover persist failed: ${message}`);
-        return { content: [{ type: "text", text: `ByteRover persist failed: ${message}` }], details: { status: "error", message } };
+        return {
+          content: [{ type: "text", text: `ByteRover persist failed: ${message}` }],
+          details: { status: "error", message },
+        };
       }
     },
   });
@@ -729,6 +830,7 @@ git commit -m "feat: add pi byterover manual tools"
 ### Task 6: Pi Extension Factory and Event Tests
 
 **Files:**
+
 - Replace: `src/index.ts`
 - Replace: `src/index.test.ts`
 
@@ -744,13 +846,16 @@ import { tmpdir } from "node:os";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import byterover from "./index.js";
 
-const bridgeInstances = vi.hoisted(() => [] as Array<{
-  config: Record<string, unknown>;
-  ready: ReturnType<typeof vi.fn>;
-  recall: ReturnType<typeof vi.fn>;
-  search: ReturnType<typeof vi.fn>;
-  persist: ReturnType<typeof vi.fn>;
-}>);
+const bridgeInstances = vi.hoisted(
+  () =>
+    [] as Array<{
+      config: Record<string, unknown>;
+      ready: ReturnType<typeof vi.fn>;
+      recall: ReturnType<typeof vi.fn>;
+      search: ReturnType<typeof vi.fn>;
+      persist: ReturnType<typeof vi.fn>;
+    }>,
+);
 
 vi.mock("@byterover/brv-bridge", () => {
   class MockBrvBridge {
@@ -817,7 +922,13 @@ import { ConfigSchema, maxCuratedTurnCacheSize } from "./config.js";
 import { loadConfig } from "./config-loader.js";
 import { ensureBrvGitignore } from "./gitignore.js";
 import { LruCache } from "./lru-cache.js";
-import { extractPiSessionMessages, formatMessages, selectMessagesForRecall, selectMessagesInTurn, turnKey } from "./messages.js";
+import {
+  extractPiSessionMessages,
+  formatMessages,
+  selectMessagesForRecall,
+  selectMessagesInTurn,
+  turnKey,
+} from "./messages.js";
 import { stripEchoedRecallQuery } from "./recall.js";
 import { registerManualTools } from "./tools.js";
 
@@ -833,7 +944,9 @@ export const buildManualToolGuidance = (config: { autoRecall: boolean; autoPersi
       "Use `brv_recall`, `brv_search`, or `brv_persist` when you need an extra targeted lookup, immediate durable save, or explicit user-requested memory operation.",
     );
   } else {
-    guidance.push("Use `brv_recall`, `brv_search`, and `brv_persist` when durable memory is useful because one or more automatic memory behaviors are disabled.");
+    guidance.push(
+      "Use `brv_recall`, `brv_search`, and `brv_persist` when durable memory is useful because one or more automatic memory behaviors are disabled.",
+    );
   }
   return guidance.join("\n");
 };
@@ -876,7 +989,12 @@ export default function byterover(pi: ExtensionAPI) {
       warn: (message) => log("warn", message),
       error: (message) => log("error", message),
     };
-    const createBridge = (override?: { cwd?: string; searchTimeoutMs?: number; recallTimeoutMs?: number; persistTimeoutMs?: number }) =>
+    const createBridge = (override?: {
+      cwd?: string;
+      searchTimeoutMs?: number;
+      recallTimeoutMs?: number;
+      persistTimeoutMs?: number;
+    }) =>
       new BrvBridge({
         brvPath: config.brvPath ?? "brv",
         searchTimeoutMs: override?.searchTimeoutMs ?? config.searchTimeoutMs,
@@ -887,7 +1005,8 @@ export default function byterover(pi: ExtensionAPI) {
       });
     const bridge = createBridge();
 
-    const branchMessages = (eventCtx: ExtensionContext) => extractPiSessionMessages(eventCtx.sessionManager.getBranch());
+    const branchMessages = (eventCtx: ExtensionContext) =>
+      extractPiSessionMessages(eventCtx.sessionManager.getBranch());
     const curateTurn = async (eventCtx: ExtensionContext) => {
       if (!config.autoPersist) return;
       const messages = selectMessagesInTurn(branchMessages(eventCtx));
@@ -902,16 +1021,25 @@ export default function byterover(pi: ExtensionAPI) {
       }
       const formatted = formatMessages(messages);
       if (!formatted) return;
-      const promise = bridge.persist(`${config.persistPrompt.trim()}\n\nConversation:\n\n---\n${formatted}`, { cwd: eventCtx.cwd }).then((result) => {
-        if (result.status === "error") {
-          notify("error", "Failed to curate conversation turn, see logs for details");
-          log("error", `ByteRover process failed: ${result.message}`);
-          return;
-        }
-        curatedTurns.set(sessionKey, key);
-      });
+      const promise = bridge
+        .persist(`${config.persistPrompt.trim()}\n\nConversation:\n\n---\n${formatted}`, {
+          cwd: eventCtx.cwd,
+        })
+        .then((result) => {
+          if (result.status === "error") {
+            notify("error", "Failed to curate conversation turn, see logs for details");
+            log("error", `ByteRover process failed: ${result.message}`);
+            return;
+          }
+          curatedTurns.set(sessionKey, key);
+        });
       inFlightCurations.set(sessionKey, { key, promise });
-      try { await promise; } finally { if (inFlightCurations.get(sessionKey)?.promise === promise) inFlightCurations.delete(sessionKey); }
+      try {
+        await promise;
+      } finally {
+        if (inFlightCurations.get(sessionKey)?.promise === promise)
+          inFlightCurations.delete(sessionKey);
+      }
     };
 
     if (config.manualTools) registerManualTools({ pi, config, bridge, createBridge, log, notify });
@@ -933,7 +1061,9 @@ export default function byterover(pi: ExtensionAPI) {
         const result = await bridge.recall(query, { cwd: eventCtx.cwd });
         const content = stripEchoedRecallQuery(result.content, query);
         if (!content) return { systemPrompt };
-        return { systemPrompt: `${systemPrompt}\n\n<${config.contextTagName}>\n${content}\n</${config.contextTagName}>` };
+        return {
+          systemPrompt: `${systemPrompt}\n\n<${config.contextTagName}>\n${content}\n</${config.contextTagName}>`,
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         notify("error", "Failed to recall context from ByteRover, see logs for details");
@@ -975,13 +1105,14 @@ git commit -m "feat: port byterover extension to pi events"
 ### Task 7: README Rewrite
 
 **Files:**
+
 - Replace: `README.md`
 
 - [ ] **Step 1: Rewrite README for Pi**
 
 Replace OpenCode-specific README content with Pi docs covering:
 
-```md
+````md
 # pi-byterover
 
 ByteRover memory integration for Pi.
@@ -1001,6 +1132,7 @@ ByteRover memory integration for Pi.
 ```bash
 pi install npm:pi-byterover
 ```
+````
 
 For local development:
 
@@ -1047,20 +1179,22 @@ pnpm test
 pnpm typecheck
 pnpm build
 ```
-```
+
+````
 
 - [ ] **Step 2: Commit**
 
 ```bash
 git add README.md
 git commit -m "docs: document pi byterover usage"
-```
+````
 
 ---
 
 ### Task 8: Full Verification and Cleanup
 
 **Files:**
+
 - Modify any files needed to satisfy checks.
 - Add `.changeset/*.md` if this user-facing package change will be published.
 
