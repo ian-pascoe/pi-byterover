@@ -37,20 +37,8 @@ type RuntimeState = {
 };
 
 const logBrv = (level: LogLevel, message: string) => {
-  const prefixed = `[byterover] ${message}`;
-  if (level === "error") {
-    console.error(prefixed);
-    return;
-  }
-  if (level === "warn") {
-    console.warn(prefixed);
-    return;
-  }
-  if (level === "info") {
-    console.info(prefixed);
-    return;
-  }
-  console.debug(prefixed);
+  void level;
+  void message;
 };
 
 const notifyBrv = (
@@ -191,12 +179,7 @@ export default function byterover(pi: ExtensionAPI) {
         ),
       };
     } catch (error) {
-      notifyBrv(
-        ctx,
-        "error",
-        "Failed to recall context from ByteRover, see logs for details",
-        config,
-      );
+      notifyBrv(ctx, "error", "Failed to recall context from ByteRover", config);
       logBrv("error", `ByteRover recall failed: ${errorMessage(error)}`);
       return { systemPrompt };
     }
@@ -238,12 +221,7 @@ export default function byterover(pi: ExtensionAPI) {
           { cwd: ctx.cwd },
         );
         if (result.status === "error") {
-          notifyBrv(
-            ctx,
-            "error",
-            "Failed to curate conversation turn, see logs for details",
-            config,
-          );
+          notifyBrv(ctx, "error", "Failed to curate conversation turn with ByteRover", config);
           logBrv("error", `ByteRover curation failed: ${result.message}`);
           return;
         }
@@ -253,7 +231,7 @@ export default function byterover(pi: ExtensionAPI) {
           curatedTurns.set(dedupeKey, key);
         }
       } catch (error) {
-        notifyBrv(ctx, "error", "Failed to curate conversation turn, see logs for details", config);
+        notifyBrv(ctx, "error", "Failed to curate conversation turn with ByteRover", config);
         logBrv("error", `ByteRover curation failed: ${errorMessage(error)}`);
       }
     };
@@ -273,7 +251,7 @@ export default function byterover(pi: ExtensionAPI) {
     const configResult = await loadConfig({ cwd: ctx.cwd });
     if (!configResult.success) {
       runtime = undefined;
-      notifyBrv(ctx, "error", "Invalid Byterover configuration, see logs for details");
+      notifyBrv(ctx, "error", "Invalid ByteRover configuration");
       logBrv("error", configResult.error.message);
       return;
     }

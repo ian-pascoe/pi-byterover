@@ -207,6 +207,39 @@ describe("byterover Pi extension", () => {
     expect(bridgeInstances[0]?.config.logger).toBeDefined();
   });
 
+  test("suppresses bridge logger output from process console streams", async () => {
+    await setup();
+    const logger = bridgeInstances[0]?.config.logger as {
+      debug?: (message: string) => void;
+      info: (message: string) => void;
+      warn: (message: string) => void;
+      error: (message: string) => void;
+    };
+
+    logger.debug?.("exit 0 (stdout=0 chars, stderr=0 chars)");
+    logger.info("bridge info");
+    logger.warn("bridge warning");
+    logger.error("bridge error");
+
+    expect(console.debug).not.toHaveBeenCalled();
+    expect(console.info).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  test("quiet suppresses user-facing ByteRover failure notifications", async () => {
+    const { handlers, ctx } = await setup({ config: { quiet: true } });
+    const bridge = bridgeInstances[0]!;
+    bridge.recall.mockRejectedValue(new Error("recall exploded"));
+    const beforeAgentStart = getHandler(handlers, "before_agent_start");
+
+    const result = await beforeAgentStart(beforeAgentEvent(), ctx);
+
+    expect(result).toMatchObject({ systemPrompt: expect.stringContaining("base prompt") });
+    expect(ctx.ui.notify).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
   test("disabled config creates no bridge/tools/event handlers beyond session_start", async () => {
     const harness = await setup({ config: { enabled: false } });
 
@@ -383,6 +416,7 @@ describe("byterover Pi extension", () => {
       "[user]: persist this decision",
     );
     expect(bridgeInstances[0]?.persist.mock.calls[0]?.[0]).not.toContain("old question");
+    expect(console.debug).not.toHaveBeenCalled();
   });
 
   test("stale curation completion does not overwrite newer dedupe state", async () => {
@@ -443,7 +477,7 @@ describe("byterover Pi extension", () => {
     expect(bridgeInstances[0]?.persist).not.toHaveBeenCalled();
   });
 
-  test("invalid config notifies/logs and creates no bridge", async () => {
+  test("invalid config notifies and creates no bridge without console output", async () => {
     const { ctx, handlers, tools } = await setup({
       config: { recallTimeoutMs: "slow" },
     });
@@ -451,12 +485,7 @@ describe("byterover Pi extension", () => {
     expect(bridgeInstances).toHaveLength(0);
     expect(tools.size).toBe(0);
     expect([...handlers.keys()]).toEqual(["session_start"]);
-    expect(ctx.ui.notify).toHaveBeenCalledWith(
-      "Invalid Byterover configuration, see logs for details",
-      "error",
-    );
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining("Invalid Byterover configuration"),
-    );
+    expect(ctx.ui.notify).toHaveBeenCalledWith("Invalid ByteRover configuration", "error");
+    expect(console.error).not.toHaveBeenCalled();
   });
 });
