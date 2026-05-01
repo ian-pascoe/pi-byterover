@@ -1,4 +1,16 @@
-# pi-byterover
+<div align="center">
+
+<h1>pi-byterover</h1>
+
+<p>Bring ByteRover memory to Pi agents with automatic recall and persistence.</p>
+
+<p>
+  <a href="https://www.npmjs.com/package/pi-byterover"><img src="https://img.shields.io/npm/v/pi-byterover?style=for-the-badge&color=5B8DEF" alt="npm version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/pi-byterover?style=for-the-badge&color=34D399" alt="license"></a>
+  <a href="https://github.com/ian-pascoe/pi-byterover"><img src="https://img.shields.io/badge/github-pi--byterover-111827?style=for-the-badge&logo=github" alt="GitHub repository"></a>
+</p>
+
+</div>
 
 `pi-byterover` connects Pi sessions to ByteRover through `@byterover/brv-bridge`.
 
