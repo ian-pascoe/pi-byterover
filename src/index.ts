@@ -1,74 +1,72 @@
-import { tool, type Plugin } from "@opencode-ai/plugin";
-import { BrvBridge } from "@byterover/brv-bridge";
-import type { BrvLogger, SearchResultItem } from "@byterover/brv-bridge";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import {
-  brvGitignore,
-  brvGitignoreBeginMarker,
-  brvGitignoreEndMarker,
-  brvGitignoreRules,
-  ConfigSchema,
-  maxCuratedTurnCacheSize,
-} from "./config.js";
+import { BrvBridge, type BrvLogger } from "@byterover/brv-bridge";
+import type {
+  BeforeAgentStartEvent,
+  BeforeAgentStartEventResult,
+  ExtensionAPI,
+  ExtensionContext,
+} from "@mariozechner/pi-coding-agent";
+import { maxCuratedTurnCacheSize } from "./config.js";
+import { type ByteroverConfig, loadConfig } from "./config-loader.js";
+import { ensureBrvGitignore } from "./gitignore.js";
 import { LruCache } from "./lru-cache.js";
 import {
+  extractPiSessionMessages,
   formatMessages,
   selectMessagesForRecall,
   selectMessagesInTurn,
-  type SessionMessage,
   turnKey,
 } from "./messages.js";
 import { stripEchoedRecallQuery } from "./recall.js";
+import { registerManualTools } from "./tools.js";
 
-const hasCode = (error: unknown, code: string) => {
-  return typeof error === "object" && error !== null && "code" in error && error.code === code;
+type LogLevel = "debug" | "info" | "warn" | "error";
+type NotifyType = "info" | "warning" | "error";
+
+type BridgeOverride = {
+  cwd?: string;
+  searchTimeoutMs?: number;
+  recallTimeoutMs?: number;
+  persistTimeoutMs?: number;
 };
 
-const escapeRegExp = (value: string) => {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+type RuntimeState = {
+  config: ByteroverConfig;
+  bridge: BrvBridge;
+  curatedTurns: LruCache<string, string>;
+  inFlightCurations: Map<string, { key: string; promise: Promise<void> }>;
 };
 
-const managedGitignoreRules = new Set(
-  brvGitignoreRules.split("\n").filter((line) => line.length > 0 && !line.startsWith("#")),
-);
+const logBrv = (level: LogLevel, message: string) => {
+  const prefixed = `[byterover] ${message}`;
+  if (level === "error") {
+    console.error(prefixed);
+    return;
+  }
+  if (level === "warn") {
+    console.warn(prefixed);
+    return;
+  }
+  if (level === "info") {
+    console.info(prefixed);
+    return;
+  }
+  console.debug(prefixed);
+};
 
-const managedGitignoreBlock = new RegExp(
-  `(?:^|\\r?\\n)${escapeRegExp(brvGitignoreBeginMarker)}[\\s\\S]*?${escapeRegExp(
-    brvGitignoreEndMarker,
-  )}\\r?\\n?`,
-  "gu",
-);
-
-const formatSearchResults = (
-  results: Array<SearchResultItem>,
-  totalFound: number,
+const notifyBrv = (
+  ctx: ExtensionContext,
+  type: NotifyType,
   message: string,
+  config?: Pick<ByteroverConfig, "quiet">,
 ) => {
-  if (results.length === 0) return message || "No ByteRover search results found.";
-
-  const header = `Found ${totalFound} ByteRover ${totalFound === 1 ? "result" : "results"}.`;
-  const lines = results.flatMap((result, index) => {
-    const details = [
-      `score: ${result.score}`,
-      result.symbolKind ? `kind: ${result.symbolKind}` : undefined,
-      result.backlinkCount === undefined ? undefined : `backlinks: ${result.backlinkCount}`,
-    ].filter(Boolean);
-    const output = [
-      `${index + 1}. ${result.title} (${result.path})`,
-      details.length > 0 ? `   ${details.join(", ")}` : undefined,
-      `   ${result.excerpt}`,
-    ];
-    if (result.relatedPaths && result.relatedPaths.length > 0) {
-      output.push(`   related: ${result.relatedPaths.join(", ")}`);
-    }
-    return output.filter((line) => line !== undefined);
-  });
-
-  return [header, ...lines].join("\n");
+  if (config?.quiet) return;
+  if (!ctx.hasUI) return;
+  ctx.ui.notify(message, type);
 };
 
-const buildManualToolGuidance = (config: { autoRecall: boolean; autoPersist: boolean }) => {
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+export const buildManualToolGuidance = (config: { autoRecall: boolean; autoPersist: boolean }) => {
   const guidance = [
     "ByteRover memory guidance:",
     `Automatic recall is ${config.autoRecall ? "enabled" : "disabled"}.`,
@@ -89,372 +87,219 @@ const buildManualToolGuidance = (config: { autoRecall: boolean; autoPersist: boo
   return guidance.join("\n");
 };
 
-const normalizeBrvGitignore = (existing: string) => {
-  const output: Array<string> = [];
-  let insertedManagedBlock = false;
-  let skippingManagedBlock = false;
-
-  const insertManagedBlock = () => {
-    if (insertedManagedBlock) return;
-    if (output.length > 0 && output[output.length - 1] !== "") output.push("");
-    output.push(...brvGitignore.trimEnd().split("\n"));
-    insertedManagedBlock = true;
-  };
-
-  for (const line of existing
-    .replace(managedGitignoreBlock, `\n${brvGitignore}\n`)
-    .split(/\r?\n/)) {
-    if (line === brvGitignoreBeginMarker) {
-      insertManagedBlock();
-      skippingManagedBlock = true;
-      continue;
-    }
-    if (skippingManagedBlock) {
-      if (line === brvGitignoreEndMarker) skippingManagedBlock = false;
-      continue;
-    }
-    if (line === "# ByteRover generated files" || managedGitignoreRules.has(line)) {
-      insertManagedBlock();
-      continue;
-    }
-    output.push(line);
-  }
-
-  while (output.length > 0 && output[output.length - 1] === "") output.pop();
-  if (!insertedManagedBlock) insertManagedBlock();
-
-  return `${output.join("\n")}\n`;
+const appendSystemPromptBlock = (systemPrompt: string, block: string) => {
+  const trimmedBlock = block.trim();
+  if (!trimmedBlock) return systemPrompt;
+  if (!systemPrompt.trim()) return trimmedBlock;
+  return `${systemPrompt.trimEnd()}\n\n${trimmedBlock}`;
 };
 
-const ensureBrvGitignore = async (cwd: string) => {
-  await access(cwd);
-  await mkdir(join(cwd, ".brv"), { recursive: true });
+const sessionKey = (ctx: ExtensionContext) => ctx.sessionManager.getSessionFile() ?? ctx.cwd;
 
-  const gitignorePath = join(cwd, ".brv", ".gitignore");
+export default function byterover(pi: ExtensionAPI) {
+  let runtime: RuntimeState | undefined;
+  let eventHandlersRegistered = false;
 
-  try {
-    const existing = await readFile(gitignorePath, "utf8");
-    const normalized = normalizeBrvGitignore(existing);
-    if (existing === normalized) return;
-    await writeFile(gitignorePath, normalized, "utf8");
-  } catch (error) {
-    if (!hasCode(error, "ENOENT")) throw error;
-    await writeFile(gitignorePath, brvGitignore, "utf8");
-  }
-};
+  const registerRuntimeEventHandlers = () => {
+    if (eventHandlersRegistered) return;
+    eventHandlersRegistered = true;
 
-export const ByteroverPlugin: Plugin = async ({ client, directory: cwd }, options) => {
-  const curatedTurns = new LruCache<string, string>(maxCuratedTurnCacheSize);
-  const inFlightCurations = new Map<string, { key: string; promise: Promise<void> }>();
-
-  const logBrv = (level: "debug" | "info" | "warn" | "error", message: string) => {
-    client.app.log({
-      body: {
-        service: "byterover",
-        level,
-        message,
-      },
+    pi.on("before_agent_start", async (event, ctx) => beforeAgentStart(event, ctx));
+    pi.on("agent_end", async (_event, ctx) => {
+      await curateTurn(ctx);
+    });
+    pi.on("session_before_compact", async (_event, ctx) => {
+      await curateTurn(ctx);
     });
   };
 
-  const configParseResult = ConfigSchema.safeParse(options);
-  if (!configParseResult.success) {
-    client.tui.showToast({
-      body: {
-        variant: "error",
-        message: "Invalid Byterover plugin configuration, see logs for details",
-      },
-    });
-    logBrv("error", `Invalid Byterover plugin configuration: ${configParseResult.error.message}`);
-    return {};
-  }
+  const createBridgeFactory = (config: ByteroverConfig, defaultCwd: string) => {
+    const brvLogger: BrvLogger = {
+      debug: (message) => logBrv("debug", message),
+      info: (message) => logBrv("info", message),
+      warn: (message) => logBrv("warn", message),
+      error: (message) => logBrv("error", message),
+    };
 
-  const config = configParseResult.data;
-  if (!config.enabled) return {};
-
-  const toastBrv = (variant: "success" | "info" | "warning" | "error", message: string) => {
-    if (config.quiet) return;
-    client.tui.showToast({
-      body: {
-        variant,
-        message,
-      },
-    });
+    return (override?: BridgeOverride) =>
+      new BrvBridge({
+        brvPath: config.brvPath,
+        searchTimeoutMs: override?.searchTimeoutMs ?? config.searchTimeoutMs,
+        recallTimeoutMs: override?.recallTimeoutMs ?? config.recallTimeoutMs,
+        persistTimeoutMs: override?.persistTimeoutMs ?? config.persistTimeoutMs,
+        cwd: override?.cwd ?? defaultCwd,
+        logger: brvLogger,
+      });
   };
 
-  try {
-    await ensureBrvGitignore(cwd);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    toastBrv("warning", "Failed to initialize ByteRover storage, some features may not work");
-    logBrv("warn", `Failed to bootstrap .brv/.gitignore: ${message}`);
-  }
+  const beforeAgentStart = async (
+    event: BeforeAgentStartEvent,
+    ctx: ExtensionContext,
+  ): Promise<BeforeAgentStartEventResult> => {
+    const state = runtime;
+    if (state === undefined) return { systemPrompt: event.systemPrompt };
 
-  const brvLogger: BrvLogger = {
-    debug: (message) => logBrv("debug", message),
-    info: (message) => logBrv("info", message),
-    warn: (message) => logBrv("warn", message),
-    error: (message) => logBrv("error", message),
-  };
+    const { bridge, config } = state;
+    let systemPrompt = event.systemPrompt;
 
-  const createBridge = (override?: {
-    cwd?: string;
-    searchTimeoutMs?: number;
-    recallTimeoutMs?: number;
-    persistTimeoutMs?: number;
-  }) =>
-    new BrvBridge({
-      brvPath: config.brvPath ?? "brv",
-      searchTimeoutMs: override?.searchTimeoutMs ?? config.searchTimeoutMs,
-      recallTimeoutMs: override?.recallTimeoutMs ?? config.recallTimeoutMs,
-      persistTimeoutMs: override?.persistTimeoutMs ?? config.persistTimeoutMs,
-      cwd: override?.cwd ?? cwd,
-      logger: brvLogger,
-    });
+    if (config.manualTools) {
+      systemPrompt = appendSystemPromptBlock(systemPrompt, buildManualToolGuidance(config));
+    }
 
-  const brvBridge = createBridge();
+    if (!config.autoRecall) return { systemPrompt };
 
-  const fetchSessionMessages = async (sessionID: string): Promise<Array<SessionMessage>> => {
-    const messagesResponse = await client.session.messages({
-      path: { id: sessionID },
-    });
-    if (messagesResponse.error) {
-      toastBrv("error", "Failed to fetch session messages, see logs for details");
-      logBrv(
+    const isReady = await bridge.ready();
+    if (!isReady) {
+      notifyBrv(ctx, "warning", "ByteRover bridge not ready, skipping recall", config);
+      logBrv("warn", "ByteRover bridge not ready, skipping recall");
+      return { systemPrompt };
+    }
+
+    const messagesForRecall = selectMessagesForRecall(
+      extractPiSessionMessages(ctx.sessionManager.getBranch()),
+      config,
+    );
+    const formattedMessages = formatMessages(messagesForRecall);
+    if (!formattedMessages) return { systemPrompt };
+
+    try {
+      const query = `${config.recallPrompt.trim()}\n\nRecent conversation:\n\n---\n${formattedMessages}`;
+      const brvResult = await bridge.recall(query, { cwd: ctx.cwd });
+      const content = stripEchoedRecallQuery(brvResult.content, query);
+      if (!content) return { systemPrompt };
+
+      return {
+        systemPrompt: appendSystemPromptBlock(
+          systemPrompt,
+          `<${config.contextTagName}>\n${content}\n</${config.contextTagName}>`,
+        ),
+      };
+    } catch (error) {
+      notifyBrv(
+        ctx,
         "error",
-        `Failed to fetch messages for session ${sessionID}: ${JSON.stringify(messagesResponse.error.data)}`,
+        "Failed to recall context from ByteRover, see logs for details",
+        config,
       );
-      return [];
+      logBrv("error", `ByteRover recall failed: ${errorMessage(error)}`);
+      return { systemPrompt };
     }
-    return messagesResponse.data;
   };
 
-  const fetchMessagesInTurn = async (sessionID: string) => {
-    const messages = await fetchSessionMessages(sessionID);
-    return selectMessagesInTurn(messages);
-  };
+  const curateTurn = async (ctx: ExtensionContext) => {
+    const state = runtime;
+    if (state === undefined) return;
 
-  const fetchMessagesForRecall = async (sessionID: string) => {
-    const messages = await fetchSessionMessages(sessionID);
-    return selectMessagesForRecall(messages, config);
-  };
-
-  const curateTurn = async (sessionID: string) => {
+    const { bridge, config, curatedTurns, inFlightCurations } = state;
     if (!config.autoPersist) return;
 
-    const messagesInTurn = await fetchMessagesInTurn(sessionID);
+    const messagesInTurn = selectMessagesInTurn(
+      extractPiSessionMessages(ctx.sessionManager.getBranch()),
+    );
     if (messagesInTurn.length === 0) return;
 
     const key = turnKey(messagesInTurn);
-    if (curatedTurns.get(sessionID) === key) {
-      logBrv("debug", `Skipping duplicate ByteRover curation for session ${sessionID}`);
+    const dedupeKey = sessionKey(ctx);
+    if (curatedTurns.get(dedupeKey) === key) {
+      logBrv("debug", `Skipping duplicate ByteRover curation for ${dedupeKey}`);
       return;
     }
-    const inFlightCuration = inFlightCurations.get(sessionID);
+
+    const inFlightCuration = inFlightCurations.get(dedupeKey);
     if (inFlightCuration?.key === key) {
-      logBrv("debug", `Skipping in-flight ByteRover curation for session ${sessionID}`);
+      logBrv("debug", `Skipping in-flight ByteRover curation for ${dedupeKey}`);
       await inFlightCuration.promise;
       return;
     }
 
     const formattedMessages = formatMessages(messagesInTurn);
-    if (formattedMessages.length === 0) return;
+    if (!formattedMessages) return;
 
     const persistCuration = async () => {
-      const brvResult = await brvBridge.persist(
-        `${config.persistPrompt.trim()}\n\nConversation:\n\n---\n${formattedMessages}`,
-        { cwd },
-      );
-      if (brvResult.status === "error") {
-        toastBrv("error", "Failed to curate conversation turn, see logs for details");
-        logBrv("error", `Byterover process failed for session ${sessionID}: ${brvResult.message}`);
-        return;
-      }
+      try {
+        const result = await bridge.persist(
+          `${config.persistPrompt.trim()}\n\nConversation:\n\n---\n${formattedMessages}`,
+          { cwd: ctx.cwd },
+        );
+        if (result.status === "error") {
+          notifyBrv(
+            ctx,
+            "error",
+            "Failed to curate conversation turn, see logs for details",
+            config,
+          );
+          logBrv("error", `ByteRover curation failed: ${result.message}`);
+          return;
+        }
 
-      curatedTurns.set(sessionID, key);
+        curatedTurns.set(dedupeKey, key);
+      } catch (error) {
+        notifyBrv(ctx, "error", "Failed to curate conversation turn, see logs for details", config);
+        logBrv("error", `ByteRover curation failed: ${errorMessage(error)}`);
+      }
     };
 
-    const curationPromise = persistCuration();
-    inFlightCurations.set(sessionID, { key, promise: curationPromise });
+    const promise = persistCuration();
+    inFlightCurations.set(dedupeKey, { key, promise });
     try {
-      await curationPromise;
+      await promise;
     } finally {
-      if (inFlightCurations.get(sessionID)?.promise === curationPromise) {
-        inFlightCurations.delete(sessionID);
+      if (inFlightCurations.get(dedupeKey)?.promise === promise) {
+        inFlightCurations.delete(dedupeKey);
       }
     }
   };
 
-  const ensureBridgeReady = async () => {
-    const isReady = await brvBridge.ready();
-    if (isReady) return true;
-    logBrv("warn", "Byterover bridge not ready for manual tool call");
-    return false;
-  };
+  pi.on("session_start", async (_event, ctx) => {
+    const configResult = await loadConfig({ cwd: ctx.cwd });
+    if (!configResult.success) {
+      runtime = undefined;
+      notifyBrv(ctx, "error", "Invalid Byterover configuration, see logs for details");
+      logBrv("error", configResult.error.message);
+      return;
+    }
 
-  const manualTools = config.manualTools
-    ? {
-        brv_recall: tool({
-          description: "Recall relevant context from ByteRover memory for a raw query.",
-          args: {
-            query: tool.schema.string().trim().min(1).describe("Raw recall query."),
-            timeoutMs: tool.schema
-              .number()
-              .int()
-              .positive()
-              .optional()
-              .describe("Optional recall timeout in milliseconds for this memory query."),
-          },
-          execute: async ({ query, timeoutMs }, context) => {
-            if (!(await ensureBridgeReady())) return "ByteRover bridge is not ready.";
-            try {
-              const recallBridge =
-                timeoutMs === undefined
-                  ? brvBridge
-                  : createBridge({ cwd: context.directory, recallTimeoutMs: timeoutMs });
-              const brvResult = await recallBridge.recall(query, {
-                cwd: context.directory,
-                signal: context.abort,
-              });
-              const content = stripEchoedRecallQuery(brvResult.content, query);
-              return content || "No relevant ByteRover context found.";
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              logBrv("error", `Manual ByteRover recall failed: ${message}`);
-              return `ByteRover recall failed: ${message}`;
-            }
-          },
-        }),
-        brv_search: tool({
-          description: "Search ByteRover memory for ranked file-level context results.",
-          args: {
-            query: tool.schema.string().trim().min(1).describe("Raw search query."),
-            limit: tool.schema
-              .number()
-              .int()
-              .min(1)
-              .max(50)
-              .optional()
-              .describe("Maximum number of results to return, from 1 to 50."),
-            scope: tool.schema
-              .string()
-              .trim()
-              .min(1)
-              .optional()
-              .describe("Optional ByteRover path prefix to scope search results."),
-            timeoutMs: tool.schema
-              .number()
-              .int()
-              .positive()
-              .optional()
-              .describe("Optional search timeout in milliseconds for this memory lookup."),
-          },
-          execute: async ({ query, limit, scope, timeoutMs }, context) => {
-            if (!(await ensureBridgeReady())) return "ByteRover bridge is not ready.";
-            try {
-              const searchOptions = {
-                cwd: context.directory,
-                ...(limit === undefined ? {} : { limit }),
-                ...(scope === undefined ? {} : { scope }),
-              };
-              const searchBridge =
-                timeoutMs === undefined
-                  ? brvBridge
-                  : createBridge({ cwd: context.directory, searchTimeoutMs: timeoutMs });
-              const brvResult = await searchBridge.search(query, searchOptions);
-              return formatSearchResults(
-                brvResult.results,
-                brvResult.totalFound,
-                brvResult.message,
-              );
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              logBrv("error", `Manual ByteRover search failed: ${message}`);
-              return `ByteRover search failed: ${message}`;
-            }
-          },
-        }),
-        brv_persist: tool({
-          description:
-            "Persist raw memory text into ByteRover without automatic curation wrapping.",
-          args: {
-            context: tool.schema.string().trim().min(1).describe("Raw memory text to persist."),
-            timeoutMs: tool.schema
-              .number()
-              .int()
-              .positive()
-              .optional()
-              .describe("Optional persist timeout in milliseconds for this memory write."),
-          },
-          execute: async ({ context: memory, timeoutMs }, toolContext) => {
-            if (!(await ensureBridgeReady())) return "ByteRover bridge is not ready.";
-            try {
-              const persistBridge =
-                timeoutMs === undefined
-                  ? brvBridge
-                  : createBridge({ cwd: toolContext.directory, persistTimeoutMs: timeoutMs });
-              const brvResult = await persistBridge.persist(memory, {
-                cwd: toolContext.directory,
-                detach: true,
-              });
-              const suffix = brvResult.message ? `: ${brvResult.message}` : "";
-              return `ByteRover persist ${brvResult.status}${suffix}`;
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              logBrv("error", `Manual ByteRover persist failed: ${message}`);
-              return `ByteRover persist failed: ${message}`;
-            }
-          },
-        }),
-      }
-    : undefined;
+    const { config } = configResult;
+    if (!config.enabled) {
+      runtime = undefined;
+      return;
+    }
 
-  return {
-    ...(manualTools === undefined ? {} : { tool: manualTools }),
-    event: async ({ event }) => {
-      if (event.type === "session.idle") {
-        const sessionID = event.properties.sessionID;
-        await curateTurn(sessionID);
-      }
-    },
-    "experimental.session.compacting": async ({ sessionID }) => {
-      await curateTurn(sessionID);
-    },
-    "experimental.chat.system.transform": async ({ sessionID }, { system }) => {
-      if (config.manualTools) system.push(buildManualToolGuidance(config));
-      if (!config.autoRecall) return;
-      if (!sessionID) return;
-
-      const isReady = await brvBridge.ready();
-      if (!isReady) {
-        toastBrv("warning", "ByteRover bridge not ready, skipping recall");
-        logBrv("warn", "Byterover bridge not ready, skipping recall");
-        return;
-      }
-
-      const messagesForRecall = await fetchMessagesForRecall(sessionID);
-      if (messagesForRecall.length === 0) return;
-
-      const formattedMessages = formatMessages(messagesForRecall);
-      if (formattedMessages.length === 0) return;
-
-      logBrv(
-        "debug",
-        `ByteRover recall using ${messagesForRecall.length} messages / ${formattedMessages.length} chars`,
+    try {
+      await ensureBrvGitignore(ctx.cwd);
+    } catch (error) {
+      notifyBrv(
+        ctx,
+        "warning",
+        "Failed to initialize ByteRover storage, some features may not work",
+        config,
       );
+      logBrv("warn", `Failed to bootstrap .brv/.gitignore: ${errorMessage(error)}`);
+    }
 
-      try {
-        const recallQuery = `${config.recallPrompt.trim()}\n\nRecent conversation:\n\n---\n${formattedMessages}`;
-        const brvResult = await brvBridge.recall(recallQuery, { cwd });
-        const content = stripEchoedRecallQuery(brvResult.content, recallQuery);
-        if (content.length === 0) return;
+    const createBridge = createBridgeFactory(config, ctx.cwd);
+    const bridge = createBridge();
+    runtime = {
+      config,
+      bridge,
+      curatedTurns: new LruCache<string, string>(maxCuratedTurnCacheSize),
+      inFlightCurations: new Map<string, { key: string; promise: Promise<void> }>(),
+    };
 
-        system.push(`<${config.contextTagName}>\n${content}\n</${config.contextTagName}>`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        toastBrv("error", "Failed to recall context from ByteRover, see logs for details");
-        logBrv("error", `Byterover recall failed for session ${sessionID}: ${message}`);
-      }
-    },
-  };
-};
+    if (config.manualTools) {
+      registerManualTools({
+        pi,
+        config,
+        bridge,
+        createBridge,
+        log: logBrv,
+        notify: (type: NotifyType, message: string) => notifyBrv(ctx, type, message, config),
+      } as Parameters<typeof registerManualTools>[0] & {
+        log: typeof logBrv;
+        notify: (type: NotifyType, message: string) => void;
+      });
+    }
+
+    registerRuntimeEventHandlers();
+  });
+}
