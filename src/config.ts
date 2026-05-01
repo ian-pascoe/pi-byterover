@@ -1,7 +1,7 @@
 import * as z from "zod/v4";
 
-export const brvGitignoreBeginMarker = "# BEGIN opencode-byterover";
-export const brvGitignoreEndMarker = "# END opencode-byterover";
+export const brvGitignoreBeginMarker = "# BEGIN pi-byterover";
+export const brvGitignoreEndMarker = "# END pi-byterover";
 
 export const brvGitignoreRules = `# Dream state and logs
 dream-log/
