@@ -78,6 +78,16 @@ const messageEntry = (
 const textResult = (result: { content: Array<{ type: string; text?: string }> }) =>
   result.content[0]?.text;
 
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+};
+
 const createFakePi = () => {
   const handlers = new Map<string, Array<Handler>>();
   const tools = new Map<string, ToolDefinition>();
@@ -222,16 +232,17 @@ describe("byterover Pi extension", () => {
     expect(gitignore).toContain("*.overview.md");
   });
 
-  test("before_agent_start recalls and injects returned context", async () => {
+  test("before_agent_start recalls with the current event prompt and injects returned context", async () => {
     const { handlers, ctx } = await setup({
-      branch: [messageEntry("u1", "user", "latest question")],
+      branch: [messageEntry("u1", "user", "previous question")],
     });
     const beforeAgentStart = getHandler(handlers, "before_agent_start");
 
     const result = await beforeAgentStart(beforeAgentEvent(), ctx);
 
     expect(bridgeInstances[0]?.recall).toHaveBeenCalledTimes(1);
-    expect(bridgeInstances[0]?.recall.mock.calls[0]?.[0]).toContain("[user]: latest question");
+    expect(bridgeInstances[0]?.recall.mock.calls[0]?.[0]).toContain("[user]: previous question");
+    expect(bridgeInstances[0]?.recall.mock.calls[0]?.[0]).toContain("[user]: user prompt");
     expect(result).toMatchObject({
       systemPrompt: expect.stringContaining(
         "<byterover-context>\nremembered context\n</byterover-context>",
@@ -372,6 +383,38 @@ describe("byterover Pi extension", () => {
       "[user]: persist this decision",
     );
     expect(bridgeInstances[0]?.persist.mock.calls[0]?.[0]).not.toContain("old question");
+  });
+
+  test("stale curation completion does not overwrite newer dedupe state", async () => {
+    const oldPersist = deferred<{ status: "completed"; message: string }>();
+    const newPersist = deferred<{ status: "completed"; message: string }>();
+    const { handlers, ctx, branch } = await setup({
+      branch: [messageEntry("u1", "user", "old decision")],
+    });
+    const bridge = bridgeInstances[0]!;
+    bridge.persist
+      .mockReturnValueOnce(oldPersist.promise)
+      .mockReturnValueOnce(newPersist.promise)
+      .mockResolvedValue({ status: "completed", message: "ok" });
+    const agentEnd = getHandler(handlers, "agent_end");
+
+    const oldCuration = agentEnd({ type: "agent_end", messages: [] }, ctx);
+    await vi.waitFor(() => expect(bridge.persist).toHaveBeenCalledTimes(1));
+
+    branch.splice(0, branch.length, messageEntry("u2", "user", "new decision"));
+    const newCuration = agentEnd({ type: "agent_end", messages: [] }, ctx);
+    await vi.waitFor(() => expect(bridge.persist).toHaveBeenCalledTimes(2));
+
+    newPersist.resolve({ status: "completed", message: "ok" });
+    await newCuration;
+    oldPersist.resolve({ status: "completed", message: "ok" });
+    await oldCuration;
+
+    await agentEnd({ type: "agent_end", messages: [] }, ctx);
+
+    expect(bridge.persist).toHaveBeenCalledTimes(2);
+    expect(bridge.persist.mock.calls[0]?.[0]).toContain("[user]: old decision");
+    expect(bridge.persist.mock.calls[1]?.[0]).toContain("[user]: new decision");
   });
 
   test("session_before_compact curation persists latest turn", async () => {

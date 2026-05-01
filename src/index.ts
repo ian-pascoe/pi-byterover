@@ -96,6 +96,19 @@ const appendSystemPromptBlock = (systemPrompt: string, block: string) => {
 
 const sessionKey = (ctx: ExtensionContext) => ctx.sessionManager.getSessionFile() ?? ctx.cwd;
 
+const messagesWithCurrentPrompt = (
+  messages: ReturnType<typeof extractPiSessionMessages>,
+  prompt: string,
+) => {
+  const text = prompt.trim();
+  if (!text) return messages;
+
+  const lastMessage = messages.at(-1);
+  if (lastMessage?.role === "user" && lastMessage.text.trim() === text) return messages;
+
+  return [...messages, { id: "current-prompt", role: "user" as const, text }];
+};
+
 export default function byterover(pi: ExtensionAPI) {
   let runtime: RuntimeState | undefined;
   let eventHandlersRegistered = false;
@@ -156,7 +169,10 @@ export default function byterover(pi: ExtensionAPI) {
     }
 
     const messagesForRecall = selectMessagesForRecall(
-      extractPiSessionMessages(ctx.sessionManager.getBranch()),
+      messagesWithCurrentPrompt(
+        extractPiSessionMessages(ctx.sessionManager.getBranch()),
+        event.prompt,
+      ),
       config,
     );
     const formattedMessages = formatMessages(messagesForRecall);
@@ -232,7 +248,10 @@ export default function byterover(pi: ExtensionAPI) {
           return;
         }
 
-        curatedTurns.set(dedupeKey, key);
+        const currentInFlightCuration = inFlightCurations.get(dedupeKey);
+        if (currentInFlightCuration?.key === key && currentInFlightCuration.promise === promise) {
+          curatedTurns.set(dedupeKey, key);
+        }
       } catch (error) {
         notifyBrv(ctx, "error", "Failed to curate conversation turn, see logs for details", config);
         logBrv("error", `ByteRover curation failed: ${errorMessage(error)}`);
