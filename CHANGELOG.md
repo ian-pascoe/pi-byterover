@@ -1,5 +1,11 @@
 # pi-byterover
 
+## 0.2.2
+
+### Patch Changes
+
+- [#5](https://github.com/ian-pascoe/pi-byterover/pull/5) [`5b33997`](https://github.com/ian-pascoe/pi-byterover/commit/5b3399771f7fe2f0857abcf8a6a03d0617b084a2) Thanks [@ian-pascoe](https://github.com/ian-pascoe)! - Suppress ByteRover bridge logs on process console streams and rely on `quiet`-aware UI notifications for user-facing failures.
+
 ## 0.2.1
 
 ### Patch Changes
