@@ -22,7 +22,11 @@ export type RegisterManualToolsInput = {
 
 const RecallParameters = Type.Object(
   {
-    query: Type.String({ minLength: 1, description: "Raw recall query." }),
+    query: Type.String({
+      minLength: 1,
+      pattern: "\\S",
+      description: "Raw recall query.",
+    }),
     timeoutMs: Type.Optional(
       Type.Integer({
         minimum: 1,
@@ -37,7 +41,11 @@ type RecallParameters = Static<typeof RecallParameters>;
 
 const SearchParameters = Type.Object(
   {
-    query: Type.String({ minLength: 1, description: "Raw search query." }),
+    query: Type.String({
+      minLength: 1,
+      pattern: "\\S",
+      description: "Raw search query.",
+    }),
     limit: Type.Optional(
       Type.Integer({
         minimum: 1,
@@ -48,6 +56,7 @@ const SearchParameters = Type.Object(
     scope: Type.Optional(
       Type.String({
         minLength: 1,
+        pattern: "\\S",
         description: "Optional ByteRover path prefix to scope search results.",
       }),
     ),
@@ -67,6 +76,7 @@ const PersistParameters = Type.Object(
   {
     context: Type.String({
       minLength: 1,
+      pattern: "\\S",
       description: "Raw memory text to persist.",
     }),
     timeoutMs: Type.Optional(

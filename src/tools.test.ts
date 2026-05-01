@@ -1,5 +1,6 @@
 import type { BrvBridge, SearchResultItem } from "@byterover/brv-bridge";
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@mariozechner/pi-coding-agent";
+import { Value } from "typebox/value";
 import { describe, expect, test, vi } from "vitest";
 import { ConfigSchema } from "./config.js";
 import { formatSearchResults, registerManualTools } from "./tools.js";
@@ -89,6 +90,21 @@ describe("registerManualTools", () => {
     expect([...tools.keys()].sort()).toEqual(["brv_persist", "brv_recall", "brv_search"]);
   });
 
+  test("schemas reject whitespace-only query, scope, and context", () => {
+    const { tools } = register();
+    const recall = tools.get("brv_recall")!;
+    const search = tools.get("brv_search")!;
+    const persist = tools.get("brv_persist")!;
+
+    expect(Value.Check(recall.parameters, { query: "auth" })).toBe(true);
+    expect(Value.Check(recall.parameters, { query: "   " })).toBe(false);
+    expect(Value.Check(search.parameters, { query: "topic", scope: "docs" })).toBe(true);
+    expect(Value.Check(search.parameters, { query: "   " })).toBe(false);
+    expect(Value.Check(search.parameters, { query: "topic", scope: "   " })).toBe(false);
+    expect(Value.Check(persist.parameters, { context: "durable memory" })).toBe(true);
+    expect(Value.Check(persist.parameters, { context: "   " })).toBe(false);
+  });
+
   test("recall checks readiness and returns a not ready message", async () => {
     const { tools, bridge } = register({ ready: vi.fn(async () => false) });
     const recall = tools.get("brv_recall");
@@ -116,7 +132,7 @@ describe("registerManualTools", () => {
 
     const result = await recall?.execute(
       "call-1",
-      { query: "auth", timeoutMs: 1234 },
+      { query: " auth ", timeoutMs: 1234 },
       signal,
       undefined,
       createContext("/work"),
@@ -152,7 +168,7 @@ describe("registerManualTools", () => {
 
     const result = await search?.execute(
       "call-1",
-      { query: "topic", limit: 5, scope: "docs" },
+      { query: " topic ", limit: 5, scope: " docs " },
       undefined,
       undefined,
       createContext("/work"),
@@ -179,7 +195,7 @@ describe("registerManualTools", () => {
 
     const result = await persist?.execute(
       "call-1",
-      { context: "durable memory", timeoutMs: 4321 },
+      { context: " durable memory ", timeoutMs: 4321 },
       undefined,
       undefined,
       createContext("/work"),
