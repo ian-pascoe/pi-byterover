@@ -4,7 +4,7 @@ import type {
   BeforeAgentStartEventResult,
   ExtensionAPI,
   ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { maxCuratedTurnCacheSize } from "./config.js";
 import { type ByteroverConfig, loadConfig } from "./config-loader.js";
 import { ensureBrvGitignore } from "./gitignore.js";
