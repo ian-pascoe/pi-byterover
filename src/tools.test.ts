@@ -1,5 +1,9 @@
 import type { BrvBridge, SearchResultItem } from "@byterover/brv-bridge";
-import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  ToolDefinition,
+} from "@earendil-works/pi-coding-agent";
 import { Value } from "typebox/value";
 import { describe, expect, test, vi } from "vitest";
 import { ConfigSchema } from "./config.js";

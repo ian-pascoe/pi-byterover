@@ -8,7 +8,7 @@ import type {
   ExtensionHandler,
   SessionStartEvent,
   ToolDefinition,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import byterover, { buildManualToolGuidance } from "./index.js";
 

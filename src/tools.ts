@@ -1,5 +1,5 @@
 import type { BrvBridge, SearchResultItem } from "@byterover/brv-bridge";
-import type { AgentToolResult, ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import type { ConfigSchema } from "./config.js";
 import { stripEchoedRecallQuery } from "./recall.js";
