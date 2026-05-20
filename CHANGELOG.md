@@ -1,5 +1,11 @@
 # pi-byterover
 
+## 0.2.3
+
+### Patch Changes
+
+- [#8](https://github.com/ian-pascoe/pi-byterover/pull/8) [`e06c3e0`](https://github.com/ian-pascoe/pi-byterover/commit/e06c3e0eb1872fa0a275d0374c866435d90329f7) Thanks [@ian-pascoe](https://github.com/ian-pascoe)! - Bump deps, fix message rendering on submit
+
 ## 0.2.2
 
 ### Patch Changes
