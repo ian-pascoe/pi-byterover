@@ -1,35 +1,38 @@
 ---
 title: Header Preference
-summary: Ian prefers the recommended header style.
+summary: User prefers the recommended header style.
 tags: []
 related: []
 keywords: []
 createdAt: '2026-05-01T16:43:12.001Z'
-updatedAt: '2026-05-01T16:43:12.001Z'
+updatedAt: '2026-05-20T10:34:15.306Z'
 ---
 ## Reason
-User indicated a preferred header style to retain as a personal preference.
+Curate header style preference from RLM context
 
 ## Raw Concept
 **Task:**
-Record the user's header style preference
+Record header style preference
 
 **Changes:**
 - Selected the recommended header style
+- Captured preference for the recommended header style
 
 **Flow:**
-preference selection -> retain style choice
+Preference identified -> recorded for reuse
 
-**Timestamp:** 2026-05-01
+**Timestamp:** 2026-05-20T10:34:09.559Z
 
 **Author:** Ian
 
 ## Narrative
 ### Structure
-A simple personal preference entry under facts/personal.
+Personal preference entry for formatting choices.
 
 ### Highlights
-This records that the user chose the recommended header style for future recall.
+The preferred option is the recommended header style.
 
 ## Facts
-- **header_style**: Ian clicked to use the recommended header. [preference]
+- **header_style_preference**: Curate only information with lasting value: facts, decisions, technical details, preferences, or notable outcomes. [preference]
+- **header_style_preference**: - `.brv/context-tree/facts/personal/header_preference.md` [preference]
+- **header_style_preference**: - `.brv/context-tree/facts/personal/reasoning_effort_preference.md` [preference]

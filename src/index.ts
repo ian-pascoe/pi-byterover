@@ -2,9 +2,10 @@ import { BrvBridge, type BrvLogger } from "@byterover/brv-bridge";
 import type {
   BeforeAgentStartEvent,
   BeforeAgentStartEventResult,
+  ContextEvent,
   ExtensionAPI,
   ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { maxCuratedTurnCacheSize } from "./config.js";
 import { type ByteroverConfig, loadConfig } from "./config-loader.js";
 import { ensureBrvGitignore } from "./gitignore.js";
@@ -29,11 +30,17 @@ type BridgeOverride = {
   persistTimeoutMs?: number;
 };
 
+type PendingRecall = {
+  key: string;
+  promise: Promise<string | undefined>;
+};
+
 type RuntimeState = {
   config: ByteroverConfig;
   bridge: BrvBridge;
   curatedTurns: LruCache<string, string>;
   inFlightCurations: Map<string, { key: string; promise: Promise<void> }>;
+  pendingRecalls: Map<string, PendingRecall>;
 };
 
 const logBrv = (level: LogLevel, message: string) => {
@@ -106,8 +113,10 @@ export default function byterover(pi: ExtensionAPI) {
     eventHandlersRegistered = true;
 
     pi.on("before_agent_start", async (event, ctx) => beforeAgentStart(event, ctx));
+    pi.on("context", async (event, ctx) => injectRecallContext(event, ctx));
     pi.on("agent_end", async (_event, ctx) => {
-      await curateTurn(ctx);
+      runtime?.pendingRecalls.delete(sessionKey(ctx));
+      void curateTurn(ctx);
     });
     pi.on("session_before_compact", async (_event, ctx) => {
       await curateTurn(ctx);
@@ -140,7 +149,7 @@ export default function byterover(pi: ExtensionAPI) {
     const state = runtime;
     if (state === undefined) return { systemPrompt: event.systemPrompt };
 
-    const { bridge, config } = state;
+    const { bridge, config, pendingRecalls } = state;
     let systemPrompt = event.systemPrompt;
 
     if (config.manualTools) {
@@ -148,13 +157,6 @@ export default function byterover(pi: ExtensionAPI) {
     }
 
     if (!config.autoRecall) return { systemPrompt };
-
-    const isReady = await bridge.ready();
-    if (!isReady) {
-      notifyBrv(ctx, "warning", "ByteRover bridge not ready, skipping recall", config);
-      logBrv("warn", "ByteRover bridge not ready, skipping recall");
-      return { systemPrompt };
-    }
 
     const messagesForRecall = selectMessagesForRecall(
       messagesWithCurrentPrompt(
@@ -166,23 +168,59 @@ export default function byterover(pi: ExtensionAPI) {
     const formattedMessages = formatMessages(messagesForRecall);
     if (!formattedMessages) return { systemPrompt };
 
-    try {
-      const query = `${config.recallPrompt.trim()}\n\nRecent conversation:\n\n---\n${formattedMessages}`;
-      const brvResult = await bridge.recall(query, { cwd: ctx.cwd });
-      const content = stripEchoedRecallQuery(brvResult.content, query);
-      if (!content) return { systemPrompt };
+    const query = `${config.recallPrompt.trim()}\n\nRecent conversation:\n\n---\n${formattedMessages}`;
+    pendingRecalls.set(sessionKey(ctx), {
+      key: turnKey(messagesForRecall),
+      promise: (async () => {
+        try {
+          const isReady = await bridge.ready();
+          if (!isReady) {
+            notifyBrv(ctx, "warning", "ByteRover bridge not ready, skipping recall", config);
+            logBrv("warn", "ByteRover bridge not ready, skipping recall");
+            return undefined;
+          }
 
-      return {
-        systemPrompt: appendSystemPromptBlock(
-          systemPrompt,
-          `<${config.contextTagName}>\n${content}\n</${config.contextTagName}>`,
-        ),
-      };
-    } catch (error) {
-      notifyBrv(ctx, "error", "Failed to recall context from ByteRover", config);
-      logBrv("error", `ByteRover recall failed: ${errorMessage(error)}`);
-      return { systemPrompt };
-    }
+          const brvResult = await bridge.recall(query, { cwd: ctx.cwd });
+          return stripEchoedRecallQuery(brvResult.content, query) || undefined;
+        } catch (error) {
+          notifyBrv(ctx, "error", "Failed to recall context from ByteRover", config);
+          logBrv("error", `ByteRover recall failed: ${errorMessage(error)}`);
+          return undefined;
+        }
+      })(),
+    });
+
+    return { systemPrompt };
+  };
+
+  const injectRecallContext = async (
+    event: ContextEvent,
+    ctx: ExtensionContext,
+  ): Promise<{ messages?: ContextEvent["messages"] }> => {
+    const state = runtime;
+    if (state === undefined) return {};
+
+    const pendingRecall = state.pendingRecalls.get(sessionKey(ctx));
+    if (pendingRecall === undefined) return {};
+
+    const content = await pendingRecall.promise;
+    if (!content) return {};
+
+    return {
+      messages: [
+        ...event.messages,
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `<${state.config.contextTagName}>\n${content}\n</${state.config.contextTagName}>`,
+            },
+          ],
+          timestamp: Date.now(),
+        },
+      ],
+    };
   };
 
   const curateTurn = async (ctx: ExtensionContext) => {
@@ -207,7 +245,6 @@ export default function byterover(pi: ExtensionAPI) {
     const inFlightCuration = inFlightCurations.get(dedupeKey);
     if (inFlightCuration?.key === key) {
       logBrv("debug", `Skipping in-flight ByteRover curation for ${dedupeKey}`);
-      await inFlightCuration.promise;
       return;
     }
 
@@ -281,6 +318,7 @@ export default function byterover(pi: ExtensionAPI) {
       bridge,
       curatedTurns: new LruCache<string, string>(maxCuratedTurnCacheSize),
       inFlightCurations: new Map<string, { key: string; promise: Promise<void> }>(),
+      pendingRecalls: new Map<string, PendingRecall>(),
     };
 
     if (config.manualTools) {

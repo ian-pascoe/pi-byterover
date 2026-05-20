@@ -8,7 +8,7 @@ import type {
   ExtensionHandler,
   SessionStartEvent,
   ToolDefinition,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import byterover, { buildManualToolGuidance } from "./index.js";
 
@@ -265,21 +265,38 @@ describe("byterover Pi extension", () => {
     expect(gitignore).toContain("*.overview.md");
   });
 
-  test("before_agent_start recalls with the current event prompt and injects returned context", async () => {
+  test("before_agent_start starts recall and context injects returned memory", async () => {
     const { handlers, ctx } = await setup({
       branch: [messageEntry("u1", "user", "previous question")],
     });
     const beforeAgentStart = getHandler(handlers, "before_agent_start");
+    const context = getHandler(handlers, "context");
 
     const result = await beforeAgentStart(beforeAgentEvent(), ctx);
+    const contextResult = await context(
+      {
+        type: "context",
+        messages: [{ role: "user", content: "user prompt", timestamp: 1 }],
+      },
+      ctx,
+    );
 
     expect(bridgeInstances[0]?.recall).toHaveBeenCalledTimes(1);
     expect(bridgeInstances[0]?.recall.mock.calls[0]?.[0]).toContain("[user]: previous question");
     expect(bridgeInstances[0]?.recall.mock.calls[0]?.[0]).toContain("[user]: user prompt");
-    expect(result).toMatchObject({
-      systemPrompt: expect.stringContaining(
-        "<byterover-context>\nremembered context\n</byterover-context>",
-      ),
+    expect((result as { systemPrompt: string }).systemPrompt).not.toContain("<byterover-context>");
+    expect(contextResult).toMatchObject({
+      messages: expect.arrayContaining([
+        expect.objectContaining({
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "<byterover-context>\nremembered context\n</byterover-context>",
+            },
+          ],
+        }),
+      ]),
     });
   });
 
@@ -295,9 +312,7 @@ describe("byterover Pi extension", () => {
     expect(systemPrompt).toContain(
       buildManualToolGuidance({ autoRecall: true, autoPersist: true }),
     );
-    expect(systemPrompt.indexOf("ByteRover memory guidance")).toBeLessThan(
-      systemPrompt.indexOf("<byterover-context>"),
-    );
+    expect(systemPrompt).not.toContain("<byterover-context>");
   });
 
   test("autoRecall disabled skips recall but still appends guidance", async () => {
@@ -417,6 +432,22 @@ describe("byterover Pi extension", () => {
     );
     expect(bridgeInstances[0]?.persist.mock.calls[0]?.[0]).not.toContain("old question");
     expect(console.debug).not.toHaveBeenCalled();
+  });
+
+  test("agent_end curation does not block handler completion", async () => {
+    const pendingPersist = deferred<{ status: "completed"; message: string }>();
+    const { handlers, ctx } = await setup({
+      branch: [messageEntry("u1", "user", "persist without blocking send")],
+    });
+    const bridge = bridgeInstances[0]!;
+    bridge.persist.mockReturnValueOnce(pendingPersist.promise);
+    const agentEnd = getHandler(handlers, "agent_end");
+
+    await expect(agentEnd({ type: "agent_end", messages: [] }, ctx)).resolves.toBeUndefined();
+    expect(bridge.persist).toHaveBeenCalledTimes(1);
+
+    pendingPersist.resolve({ status: "completed", message: "ok" });
+    await vi.waitFor(() => expect(bridge.persist).toHaveBeenCalledTimes(1));
   });
 
   test("stale curation completion does not overwrite newer dedupe state", async () => {
