@@ -48,7 +48,7 @@ export const configDefaults = {
 
 export const maxCuratedTurnCacheSize = 500;
 
-const positiveInteger = () => z.number().finite().int().positive();
+const positiveInteger = () => z.number().int().positive();
 const nonEmptyString = () => z.string().trim().min(1);
 
 export const ConfigSchema = z

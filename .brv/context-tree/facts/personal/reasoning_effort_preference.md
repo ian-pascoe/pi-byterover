@@ -2,7 +2,7 @@
 title: Reasoning Effort Preference
 summary: User prefers low reasoning effort.
 tags: []
-related: []
+related: [facts/personal/header_preference.md]
 keywords: []
 createdAt: '2026-05-01T16:41:58.564Z'
 updatedAt: '2026-05-01T16:41:58.564Z'
