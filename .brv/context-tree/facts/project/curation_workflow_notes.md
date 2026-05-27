@@ -1,18 +1,18 @@
 ---
 title: Curation Workflow Notes
-summary: 'RLM curation workflow note: use recon precheck, prefer single-pass for small contexts, and verify curated file paths via result.applied[].filePath without readFile.'
+summary: ByteRover project curation workflow notes covering recon-first processing, single-pass handling for small contexts, and verification requirements.
 tags: []
-related: []
+related: [facts/project/context_curation_workflow_notes.md]
 keywords: []
 createdAt: '2026-05-20T10:41:56.145Z'
-updatedAt: '2026-05-20T10:42:17.128Z'
+updatedAt: '2026-05-27T10:06:32.372Z'
 ---
 ## Reason
-Curate newly provided workflow notes about RLM curation and verification
+Curate project-specific curation workflow facts from RLM context
 
 ## Raw Concept
 **Task:**
-Document the curation workflow note for RLM-based context processing
+Document the RLM curation workflow requirements for this context task
 
 **Changes:**
 - Recon was already computed and should not be repeated.
@@ -21,28 +21,32 @@ Document the curation workflow note for RLM-based context processing
 - Use recon output to choose the processing mode
 - Prefer single-pass curation for small contexts
 - Verify curation via applied file paths
+- Recognized precomputed recon metadata for a small single-pass context
+- Captured timeout and taskId requirements for mapExtract usage
+- Recorded verification guidance that avoids readFile
 
 **Flow:**
-recon -> choose mode -> extract or curate -> verify applied file paths
+recon -> single-pass extraction -> curate -> verify via applied file paths
 
-**Timestamp:** 2026-05-20T10:42:12.721Z
+**Timestamp:** 2026-05-27T10:06:22.667Z
 
-**Author:** ByteRover context engineering
+**Author:** ByteRover context engineer
 
 ## Narrative
 ### Structure
-This note captures a compact RLM curation workflow and its verification rule for small context inputs.
+This knowledge belongs in the project facts domain because it describes operational curation behavior rather than product functionality.
 
 ### Dependencies
-Depends on recon results and curate output metadata to confirm success.
+The workflow depends on precomputed recon metadata and the curation tools available in the sandbox environment.
 
 ### Highlights
-The workflow emphasizes avoiding raw context output, using single-pass when suggested, and checking applied file paths for verification.
+Small contexts should be handled in a single pass, and mapExtract-based chunking has explicit timeout and taskId handling rules.
 
 ### Rules
-Do NOT print raw context. Do NOT call tools.curation.recon. For chunked extraction use tools.curation.mapExtract(). Pass taskId as a bare variable. Verify via result.applied[].filePath.
+Do NOT print raw context. Do NOT call tools.curation.recon when recon is already precomputed. Use tools.curation.groupBySubject() and tools.curation.dedup() to organize extractions when chunking is required. Verify via result.applied[].filePath and do NOT call readFile for verification.
 
 ## Facts
-- **rlm_curation_mode**: For small contexts, recon may recommend single-pass curation. [convention]
-- **mapextract_task_id**: When chunked extraction is needed, pass taskId as a bare variable to mapExtract. [convention]
-- **verification_method**: Verification should use result.applied[].filePath and not readFile. [convention]
+- **curation_recon_mode**: The recon step was already computed for this curation task, and suggestedMode is single-pass with suggestedChunkCount 1 for a 1251-character, 29-line context. [project]
+- **mapextract_timeout_requirement**: For chunked extraction, mapExtract must receive taskId as a bare variable and code_exec containing mapExtract must use timeout 300000 on the tool call itself. [project]
+- **curation_verification_method**: Verification of curation should use result.applied[].filePath rather than calling readFile. [project]
+- **raw_context_handling**: The RLM curation approach requires avoiding raw context printing and using concise summaries instead. [project]

@@ -2,7 +2,7 @@
 title: Context Curation Workflow Notes
 summary: Project curation notes covering RLM workflow expectations, verification requirements, and single-pass processing for small contexts
 tags: []
-related: [facts/project/pi_extension_output_and_diagnostics.md, facts/project/reasoning_effort_and_git_state.md]
+related: [facts/project/pi_extension_output_and_diagnostics.md, facts/project/reasoning_effort_and_git_state.md, facts/project/curation_workflow_notes.md]
 keywords: []
 createdAt: '2026-05-20T10:37:28.836Z'
 updatedAt: '2026-05-20T10:37:28.836Z'

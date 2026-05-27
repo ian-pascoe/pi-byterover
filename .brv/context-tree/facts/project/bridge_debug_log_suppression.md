@@ -2,7 +2,7 @@
 title: Bridge Debug Log Suppression
 summary: Debug console output should stay out of user-facing output; lack of logs does not mean message dispatch is blocked.
 tags: []
-related: []
+related: [facts/project/pi_extension_output_and_diagnostics.md]
 keywords: []
 createdAt: '2026-05-20T10:42:44.205Z'
 updatedAt: '2026-05-20T10:42:44.205Z'
