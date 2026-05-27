@@ -1,5 +1,11 @@
 # pi-byterover
 
+## 0.2.4
+
+### Patch Changes
+
+- [#10](https://github.com/ian-pascoe/pi-byterover/pull/10) [`9ec776e`](https://github.com/ian-pascoe/pi-byterover/commit/9ec776e35031235f50c5c11c66ca7462c9d02d9b) Thanks [@ian-pascoe](https://github.com/ian-pascoe)! - Better injected context framing
+
 ## 0.2.3
 
 ### Patch Changes
